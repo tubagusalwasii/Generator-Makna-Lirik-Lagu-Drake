@@ -90,7 +90,21 @@ if df is not None:
 
             # --- Proses Generasi ---
             with st.spinner("Langkah 2/3: Menganalisis makna..."):
-                prompt = f"Judul: {title}\nAlbum: {album}\nSumber: {sumber}\nLirik: {lyrics}\n\nMakna:"
+                prompt = f"""
+                 Tugas: Analisis makna dari lirik lagu Drake berikut ini.
+
+                    Konteks Lagu:
+                    - Judul: {title}
+                    - Album: {album}
+                    - Lirik: "{lyrics}"
+
+                    Instruksi Format:
+                    Berikan penjelasan mendalam dengan cara mengutip langsung bagian lirik spesifik dan jelaskan artinya.
+                    Contoh: "Pada lirik '[kutipan lirik]', Drake tampaknya sedang membicarakan tentang... Hal ini didukung oleh baris berikutnya '[kutipan lirik lain]' yang menyiratkan..."
+
+                    Mulai analisis Anda di bawah.
+                    Makna:
+                    """
                 inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
                 outputs = model.generate(
                     input_ids=inputs['input_ids'],
@@ -110,7 +124,7 @@ if df is not None:
 
             # --- Menampilkan Hasil ---
             st.markdown("---")
-            st.markdown("## 📄 Hasil Analisis")
+            st.markdown("## 📄 Hasil Generate")
             st.markdown(f"**🎵 Judul Lagu:** `{title}`")
             st.markdown(f"**💿 Album:** `{album}`")
             st.markdown(f"**🔗 Sumber:** `{sumber}`")
