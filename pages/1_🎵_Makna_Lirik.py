@@ -128,7 +128,7 @@ if df is not None:
             st.markdown(f"**🎵 Judul Lagu:** `{title}`")
             st.markdown(f"**💿 Album:** `{album}`")
             st.markdown(f"**🔗 Sumber:** `{sumber}`")
-            st.markdown("**🧠 Makna yang Dihasilkan AI:**")
+            st.markdown("**🧠 Makna yang Dihasilkan:**")
             st.info(generated_meaning)
 
             st.markdown("---")
