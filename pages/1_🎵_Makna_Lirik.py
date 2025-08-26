@@ -1,6 +1,7 @@
 import streamlit as st
 import torch
 import pandas as pd
+import evaluate 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -11,7 +12,7 @@ from sentence_transformers import SentenceTransformer, util
 @st.cache_resource
 def load_llm_model():
     base_model_id = "meta-llama/Llama-3.2-1B-Instruct"
-    adapter_path = "llama3-drake-finetuned-v2"
+    adapter_path = "drake-finetuned-model-final"
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
@@ -35,11 +36,9 @@ def setup_retriever():
     """Membaca dataset dan membangun sistem pencarian TF-IDF."""
     try:
         df = pd.read_csv("drake songs and meaning datasets.csv", delimiter=';', encoding='latin-1')
-        # MEMASTIKAN KOLOM 'meaning_bait' ADA (SUDAH DIGANTI)
         if 'meaning_bait' not in df.columns:
             st.error("Dataset CSV harus memiliki kolom 'meaning_bait' untuk evaluasi.")
             return None, None, None
-        # MENGGUNAKAN 'meaning_bait' SAAT MEMBERSIHKAN DATA (SUDAH DIGANTI)
         df.dropna(subset=['lyric_bait', 'song_title', 'album', 'meaning_bait'], inplace=True)
         vectorizer = TfidfVectorizer()
         tfidf_matrix = vectorizer.fit_transform(df['lyric_bait'])
@@ -85,26 +84,34 @@ if df is not None:
                 title = retrieved_data['song_title']
                 album = retrieved_data['album']
                 sumber = retrieved_data['source']
-                # MENGAMBIL MAKNA DARI KOLOM 'meaning_bait' (SUDAH DIGANTI)
                 actual_meaning = retrieved_data['meaning_bait']
 
             # --- Proses Generasi ---
             with st.spinner("Langkah 2/3: Menganalisis makna..."):
                 prompt = f"""
-                 Tugas: Analisis makna dari lirik lagu Drake berikut ini.
+Peran Anda adalah seorang pakar lirik musik dan analis budaya.
+Tugas Anda adalah memberikan analisis makna yang mendalam dan akurat dari lirik lagu Drake berikut.
 
-                    Konteks Lagu:
-                    - Judul: {title}
-                    - Album: {album}
-                    - Lirik: "{lyrics}"
+[KONTEKS LAGU]
+- Judul: {title}
+- Album: {album}
+- Lirik yang Dianalisis: "{lyrics}"
 
-                    Instruksi Format:
-                    Berikan penjelasan mendalam dengan cara mengutip langsung bagian lirik spesifik dan jelaskan artinya.
-                    Contoh: "Pada lirik '[kutipan lirik]', Drake tampaknya sedang membicarakan tentang... Hal ini didukung oleh baris berikutnya '[kutipan lirik lain]' yang menyiratkan..."
+[INSTRUKSI ANALISIS]
+1.  **Fokus Utama**: Analisis Anda HARUS berpusat pada makna dari lirik yang diberikan: "{lyrics}".
+2.  **Identifikasi Tema**: Jelaskan tema utama dari kutipan lirik tersebut (contoh: ambisi, patah hati, kesuksesan, pengkhianatan).
+3.  **Kupas Bahasa Kiasan**: Jika ada, jelaskan arti dari metafora atau perumpamaan yang digunakan Drake.
+4.  **Konteks Emosional**: Gambarkan suasana atau emosi yang ingin disampaikan melalui lirik tersebut.
 
-                    Mulai analisis Anda di bawah.
-                    Makna:
-                    """
+
+
+[INSTRUKSI FORMAT]
+- **Struktur Jawaban**: Awali dengan interpretasi umum, kemudian detailkan analisis Anda dengan **selalu mengutip bagian spesifik dari lirik** sebagai bukti.
+- **Contoh Gaya Penulisan**: "Pada lirik '[kutipan larik]', Drake tampaknya sedang membicarakan tentang... Hal ini didukung oleh baris berikutnya '[kutipan lirik lain]' yang menyiratkan..."
+
+[HASIL ANALISIS]
+Makna:
+"""
                 inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
                 outputs = model.generate(
                     input_ids=inputs['input_ids'],
@@ -117,10 +124,19 @@ if df is not None:
 
             # --- PROSES EVALUASI ---
             with st.spinner("Langkah 3/3: Mengevaluasi hasil..."):
+                # 1. Kalkulasi Cosine Similarity 
                 embedding1 = eval_model.encode(generated_meaning, convert_to_tensor=True)
                 embedding2 = eval_model.encode(actual_meaning, convert_to_tensor=True)
                 cosine_scores = util.cos_sim(embedding1, embedding2)
-                score = cosine_scores.item() * 100 # Jadikan persen
+                score = cosine_scores.item() * 100
+
+                # 2. Kalkulasi ROUGE 
+                rouge = evaluate.load("rouge")
+                results = rouge.compute(
+                    predictions=[generated_meaning],
+                    references=[actual_meaning]
+                )
+                rouge_l = results['rougeL'] * 100
 
             # --- Menampilkan Hasil ---
             st.markdown("---")
@@ -141,4 +157,11 @@ if df is not None:
                 value=f"{score:.2f}%"
             )
             st.progress(int(score))
-            st.caption("Skor ini mengukur seberapa mirip makna yang dihasilkan AI dengan makna referensi dari dataset.")
+            st.caption("Skor ini mengukur seberapa mirip makna yang dihasilkan AI dengan makna referensi.")
+
+            st.markdown("---")
+            st.metric(
+                label="ROUGE-L (Kecocokan Teks)", 
+                value=f"{rouge_l:.2f}%"
+            )
+            st.caption("Skor ini mengukur kecocokan urutan kata terpanjang yang sama.")
